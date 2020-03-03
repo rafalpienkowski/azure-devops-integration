@@ -1,0 +1,162 @@
+{
+   "$schema":"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+   "contentVersion":"1.0.0.0",
+   "parameters":{
+      "webAppName":{
+         "type":"string",
+         "metadata":{
+            "description":"Base name of the resource such as web app name and app service plan "
+         },
+         "minLength":2
+      },
+      "sku":{
+         "type":"string",
+         "defaultValue":"F1",
+         "metadata":{
+            "description":"The SKU of App Service Plan "
+         }
+      },
+      "storageSupport": {
+         "type": "bool",
+         "metadata": {
+            "description": "Marks application to use storage"
+         },
+         "defaultValue": false
+      },
+      "containerName": {
+         "type":"string",
+         "metadata": {
+            "description": "Storage's container name"
+         },
+         "defaultValue": "users"
+      },
+      "dotnetEnvironment": {
+         "type": "string",
+         "metadata": {
+            "description": "ASPNETCORE_ENVIRONMENT"
+         },
+         "defaultValue": "Cloud"
+      }
+   },
+   "variables":{
+      "appServicePlanName":"[concat(parameters('webAppName'), '-asp')]",
+      "storageAccountName":"[concat('storage', uniqueString(resourceGroup().id))]",
+      "appInsight": "[concat(parameters('webAppName'), '-ai')]"
+   },
+   "resources":[
+       {
+         "type": "Microsoft.Storage/storageAccounts",
+         "apiVersion": "2018-02-01",
+         "location": "[resourceGroup().location]",
+         "name": "[variables('storageAccountName')]",
+         "sku": {
+            "name": "Standard_LRS"
+         },
+         "kind": "StorageV2",
+         "properties": {
+            "supportsHttpsTrafficOnly": true
+         },
+          "resources": [
+            {
+               "name": "[concat('default/', parameters('containerName'))]",
+               "type": "blobServices/containers",
+               "apiVersion": "2018-03-01-preview",
+               "dependsOn": [
+                  "[variables('storageAccountName')]"
+               ]
+            }
+         ]
+       },
+       {
+         "type":"Microsoft.Web/serverfarms",
+         "apiVersion":"2018-02-01",
+         "name":"[variables('appServicePlanName')]",
+         "location":"[resourceGroup().location]",
+         "sku":{
+            "name":"[parameters('sku')]"
+         },
+         "properties":{
+            "name":"[variables('appServicePlanName')]",
+            "reserved": true
+         },
+         "kind":"linux"
+      },
+      {
+         "type":"Microsoft.Web/sites",
+         "apiVersion":"2018-11-01",
+         "name":"[parameters('webAppName')]",
+         "location":"[resourceGroup().location]",
+         "kind":"app",
+         "identity": {
+            "type": "SystemAssigned"
+         },
+         "dependsOn":[
+               "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+               "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+               "[resourceId('Microsoft.Insights/components/', variables('appInsight'))]"
+            ],
+         "properties":{
+            "serverFarmId":"[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+            "siteConfig":{
+               "linuxFxVersion": "DOTNETCORE|3.1",
+               "appSettings":[
+                   {
+                     "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                     "value": "[reference(resourceId('microsoft.insights/components/', variables('appInsight')), '2018-05-01-preview').InstrumentationKey]"
+                  },
+                  {
+                     "name": "ASPNETCORE_ENVIRONMENT",
+                     "value": "[parameters('dotnetEnvironment')]"
+                  },
+                  {
+                     "name": "StorageSupport",
+                     "value": "[parameters('storageSupport')]"
+                  },
+                  {
+                     "name": "StorageConnectionString",
+                     "value":"[aido2020.storageConnectionString(variables('storageAccountName'),listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value)]"
+                  }
+               ]
+            }
+         }
+      },
+      {
+            "apiVersion": "2018-05-01-preview",
+            "name": "[variables('appInsight')]",
+            "type": "microsoft.insights/components",
+            "location":"[resourceGroup().location]",
+            "properties": {
+                "ApplicationId": "[parameters('webAppName')]"
+            }
+        }
+   ],
+   "outputs":{
+      "webappname": {
+         "type": "string",
+         "value": "[concat('https://',parameters('webAppName'),'.azurewebsites.net')]"
+      }
+   },
+   "functions":[
+      {
+           "namespace": "aido2020",
+           "members":{
+               "storageConnectionString": {
+                  "parameters": [
+                     {
+                        "name": "storageAccountName",
+                        "type": "string"
+                     },
+                     {
+                        "name": "accountKey",
+                        "type": "string"
+                     }
+                  ],
+                  "output": {
+                     "type": "string",
+                     "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'),';AccountKey=', parameters('accountKey'))]"
+                  }
+               }
+           }
+       }
+   ]
+}

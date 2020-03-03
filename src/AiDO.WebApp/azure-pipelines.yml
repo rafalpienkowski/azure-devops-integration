@@ -1,0 +1,43 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+
+steps:
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build application'
+  inputs:
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
+    workingDirectory: 'src/'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Unit tests'
+  inputs:
+    command: 'test'
+    arguments: '--configuration $(buildConfiguration)'
+    workingDirectory: 'src/'
+
+
+- task: DotNetCoreCLI@2
+  displayName: 'Publishing project'
+  inputs:
+    command: 'publish'
+    projects: 'src/AiDO.WebApp/AiDO.WebApp.csproj'
+    publishWebProjects: True
+    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+    zipAfterPublish: True
+
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publishing artifacts'
